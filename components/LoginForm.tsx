@@ -1,50 +1,33 @@
 
 import React, { useState } from 'react';
-import { User, UserRole } from '../types';
+import { User } from '../types';
+import { apiService } from '../services/apiService';
 
 interface LoginFormProps {
   onLogin: (user: User) => void;
   onSwitchToRegister: () => void;
 }
 
-const DEFAULT_ADMIN_ID = 'heygen123';
-const DEFAULT_ADMIN_PASS = 'Lucky@0512';
-
 const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onSwitchToRegister }) => {
   const [empId, setEmpId] = useState('');
   const [password, setPassword] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
-    if (isAdmin) {
-      // Logic for the single hardcoded Admin
-      if (empId === DEFAULT_ADMIN_ID && password === DEFAULT_ADMIN_PASS) {
-        onLogin({
-          emp_id: DEFAULT_ADMIN_ID,
-          name: 'Main Administrator',
-          role: UserRole.ADMIN
-        });
-      } else {
-        setError('Invalid Admin credentials.');
-      }
-      return;
+    try {
+      const user = await apiService.login(empId, password, isAdmin);
+      onLogin(user);
+    } catch (err: any) {
+      setError(err.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setIsLoading(false);
     }
-
-    // Logic for Employees
-    const storedUsers = localStorage.getItem('users_data_v1');
-    const users: User[] = storedUsers ? JSON.parse(storedUsers) : [];
-    const foundUser = users.find(u => u.emp_id === empId && u.role === UserRole.EMPLOYEE);
-
-    if (!foundUser) {
-      setError('Employee ID not found. Please register first.');
-      return;
-    }
-
-    onLogin(foundUser);
   };
 
   return (
@@ -54,12 +37,14 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onSwitchToRegister }) =>
       <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
         <button
           onClick={() => { setIsAdmin(false); setError(''); }}
+          disabled={isLoading}
           className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${!isAdmin ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}
         >
           Employee
         </button>
         <button
           onClick={() => { setIsAdmin(true); setError(''); }}
+          disabled={isLoading}
           className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${isAdmin ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}
         >
           Admin
@@ -74,9 +59,10 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onSwitchToRegister }) =>
           <input
             type="text"
             required
+            disabled={isLoading}
             value={empId}
             onChange={(e) => setEmpId(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50"
             placeholder={isAdmin ? "heygen123" : "e.g. EMP123"}
           />
         </div>
@@ -87,9 +73,10 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onSwitchToRegister }) =>
             <input
               type="password"
               required
+              disabled={isLoading}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all disabled:bg-gray-50"
               placeholder="••••••••"
             />
           </div>
@@ -99,25 +86,25 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onSwitchToRegister }) =>
 
         <button
           type="submit"
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors"
+          disabled={isLoading}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-all flex items-center justify-center space-x-2 disabled:opacity-70"
         >
-          Login
+          {isLoading && <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white"></div>}
+          <span>{isLoading ? 'Verifying...' : 'Login'}</span>
         </button>
       </form>
 
       {!isAdmin && (
         <div className="mt-6 text-center text-sm text-gray-500">
           Don't have an account?{' '}
-          <button onClick={onSwitchToRegister} className="text-blue-600 font-semibold hover:underline">
+          <button 
+            disabled={isLoading} 
+            onClick={onSwitchToRegister} 
+            className="text-blue-600 font-semibold hover:underline disabled:opacity-50"
+          >
             Register here
           </button>
         </div>
-      )}
-      
-      {isAdmin && (
-        <p className="mt-6 text-center text-xs text-gray-400 italic">
-          Default Admin Login: <b>{DEFAULT_ADMIN_ID} / {DEFAULT_ADMIN_PASS}</b>
-        </p>
       )}
     </div>
   );

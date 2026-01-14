@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { User, UserRole } from '../types';
+import { apiService } from '../services/apiService';
 
 interface RegisterFormProps {
   onRegisterSuccess: () => void;
@@ -10,30 +10,23 @@ interface RegisterFormProps {
 const RegisterForm: React.FC<RegisterFormProps> = ({ onRegisterSuccess, onSwitchToLogin }) => {
   const [empId, setEmpId] = useState('');
   const [name, setName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
-    const storedUsers = localStorage.getItem('users_data_v1');
-    const users: User[] = storedUsers ? JSON.parse(storedUsers) : [];
-
-    if (users.some(u => u.emp_id === empId)) {
-      setError('This Employee ID is already registered.');
-      return;
+    try {
+      await apiService.register(name, empId);
+      alert('Registration successful! You can now log in.');
+      onRegisterSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Registration failed.');
+    } finally {
+      setIsLoading(false);
     }
-
-    const newUser: User = {
-      emp_id: empId,
-      name,
-      role: UserRole.EMPLOYEE
-    };
-
-    users.push(newUser);
-    localStorage.setItem('users_data_v1', JSON.stringify(users));
-    alert('Registration successful! You can now log in.');
-    onRegisterSuccess();
   };
 
   return (
@@ -47,9 +40,10 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onRegisterSuccess, onSwitch
           <input
             type="text"
             required
+            disabled={isLoading}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:bg-gray-50"
             placeholder="John Doe"
           />
         </div>
@@ -59,9 +53,10 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onRegisterSuccess, onSwitch
           <input
             type="text"
             required
+            disabled={isLoading}
             value={empId}
             onChange={(e) => setEmpId(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:bg-gray-50"
             placeholder="e.g. EMP123"
           />
         </div>
@@ -70,15 +65,21 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onRegisterSuccess, onSwitch
 
         <button
           type="submit"
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors"
+          disabled={isLoading}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-all flex items-center justify-center space-x-2 disabled:opacity-70"
         >
-          Create Employee Account
+          {isLoading && <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white"></div>}
+          <span>{isLoading ? 'Creating Account...' : 'Create Employee Account'}</span>
         </button>
       </form>
 
       <div className="mt-6 text-center text-sm text-gray-500">
         Already registered?{' '}
-        <button onClick={onSwitchToLogin} className="text-blue-600 font-semibold hover:underline">
+        <button 
+          disabled={isLoading} 
+          onClick={onSwitchToLogin} 
+          className="text-blue-600 font-semibold hover:underline disabled:opacity-50"
+        >
           Go to Login
         </button>
       </div>
