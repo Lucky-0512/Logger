@@ -6,6 +6,13 @@ interface AdminStatsProps {
   suggestions: Suggestion[];
 }
 
+interface ActiveFilter {
+  dimensionLabel: string;
+  dimensionKey: string;
+  value: string;
+  color: string;
+}
+
 const DIMENSIONS = [
   { key: 'current_status' as keyof Suggestion, label: 'STATUS', colors: ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'] },
   { key: 'final_status' as keyof Suggestion, label: 'FINAL STATUS', colors: ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0'] },
@@ -17,6 +24,7 @@ const DIMENSIONS = [
 
 const AdminStats: React.FC<AdminStatsProps> = ({ suggestions }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter | null>(null);
 
   const statsData = useMemo(() => {
     return DIMENSIONS.map((dim) => {
@@ -45,8 +53,16 @@ const AdminStats: React.FC<AdminStatsProps> = ({ suggestions }) => {
     });
   }, [suggestions]);
 
+  const filteredLogs = useMemo(() => {
+    if (!activeFilter) return [];
+    return suggestions.filter(s => {
+      const val = (s[activeFilter.dimensionKey as keyof Suggestion] as string) || 'Unassigned';
+      return val === activeFilter.value;
+    });
+  }, [activeFilter, suggestions]);
+
   return (
-    <div className="bg-gray-50/50 border-2 border-dashed border-gray-200 rounded-[3rem] p-6 sm:p-10 shadow-inner flex flex-col space-y-10">
+    <div className="bg-gray-50/50 border-2 border-dashed border-gray-200 rounded-[3rem] p-6 sm:p-10 shadow-inner flex flex-col space-y-10 relative">
       {/* Header & Search */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="flex items-center space-x-6">
@@ -101,26 +117,31 @@ const AdminStats: React.FC<AdminStatsProps> = ({ suggestions }) => {
                 return (
                   <div 
                     key={item.name} 
-                    className={`transition-opacity duration-300 ${searchTerm && !isMatch ? 'opacity-20' : 'opacity-100'}`}
+                    className={`transition-opacity duration-300 cursor-pointer group/item ${searchTerm && !isMatch ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}
+                    onClick={() => setActiveFilter({ 
+                      dimensionLabel: dim.label, 
+                      dimensionKey: dim.key, 
+                      value: item.name, 
+                      color: item.color 
+                    })}
                   >
-                    <div className="flex justify-between items-end mb-1.5 px-1">
+                    <div className="flex justify-between items-end mb-1.5 px-1 group-hover/item:translate-x-1 transition-transform">
                       <span className="text-[11px] font-black text-gray-700 uppercase truncate pr-4">
                         {item.name}
                       </span>
-                      <span className="text-[13px] font-mono font-black text-gray-900">
+                      <span className="text-[13px] font-mono font-black text-gray-900 bg-gray-50 px-2 rounded-md border border-transparent group-hover/item:border-gray-200">
                         {item.count}
                       </span>
                     </div>
-                    <div className="h-2.5 w-full bg-gray-50 rounded-full overflow-hidden border border-gray-100">
+                    <div className="h-2.5 w-full bg-gray-50 rounded-full overflow-hidden border border-gray-100 group-hover/item:shadow-inner transition-all">
                       <div 
-                        className="h-full rounded-full transition-all duration-1000 ease-out relative group/bar"
+                        className="h-full rounded-full transition-all duration-1000 ease-out relative"
                         style={{ 
                           width: `${widthPercentage}%`, 
                           backgroundColor: item.color,
-                          transitionDelay: `${Math.random() * 200}ms`
                         }}
                       >
-                        <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                        <div className="absolute inset-0 bg-white/20 animate-pulse group-hover/item:bg-white/40"></div>
                       </div>
                     </div>
                   </div>
@@ -144,11 +165,104 @@ const AdminStats: React.FC<AdminStatsProps> = ({ suggestions }) => {
                    ></div>
                  ))}
                </div>
-               <span className="text-[10px] text-gray-300 font-bold uppercase">Dynamic Breakdown</span>
+               <span className="text-[10px] text-gray-300 font-bold uppercase group-hover:text-blue-400 transition-colors">Click bar to inspect</span>
             </div>
           </div>
         ))}
       </div>
+
+      {/* Drill-down Modal */}
+      {activeFilter && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 animate-in fade-in duration-200">
+          <div 
+            className="absolute inset-0 bg-gray-900/60 backdrop-blur-xl" 
+            onClick={() => setActiveFilter(null)}
+          />
+          <div className="relative bg-white w-full max-w-5xl max-h-full rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col border border-white/20 animate-in zoom-in-95 duration-300">
+            {/* Modal Header */}
+            <div className="p-8 sm:p-10 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 bg-gradient-to-br from-white to-gray-50/50">
+              <div className="flex items-center space-x-6">
+                <div 
+                  className="w-16 h-16 rounded-3xl flex items-center justify-center shadow-lg transform rotate-3"
+                  style={{ backgroundColor: activeFilter.color }}
+                >
+                  <span className="text-2xl font-black text-white">{filteredLogs.length}</span>
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2 mb-1">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{activeFilter.dimensionLabel}</span>
+                    <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Filtered Logs</span>
+                  </div>
+                  <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase">
+                    {activeFilter.value}
+                  </h2>
+                </div>
+              </div>
+              <button 
+                onClick={() => setActiveFilter(null)}
+                className="group bg-gray-100 hover:bg-gray-900 p-4 rounded-full transition-all duration-300 shadow-sm"
+              >
+                <svg className="w-6 h-6 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content - List of Logs */}
+            <div className="flex-grow overflow-y-auto p-8 sm:p-10 bg-white custom-scrollbar">
+              <div className="grid grid-cols-1 gap-6">
+                {filteredLogs.map((log, idx) => (
+                  <div 
+                    key={log.id} 
+                    className="group/log relative bg-gray-50/50 hover:bg-white rounded-[2rem] p-6 border border-transparent hover:border-gray-200 hover:shadow-xl transition-all duration-300"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center space-x-3">
+                        <span className="px-4 py-1.5 bg-white border border-gray-100 text-[10px] font-black text-gray-500 rounded-full shadow-sm">
+                          ID: {log.id.slice(0, 8)}
+                        </span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                          {log.date_of_suggestion}
+                        </span>
+                      </div>
+                      <div className="bg-white/50 px-3 py-1 rounded-full text-[10px] font-bold text-gray-400 border border-gray-100">
+                        BY {log.suggested_by.toUpperCase()}
+                      </div>
+                    </div>
+                    <p className="text-gray-900 font-bold text-lg mb-3 leading-snug">
+                      {log.suggestion_description}
+                    </p>
+                    <div className="flex flex-wrap gap-2 mt-4">
+                      <span className="px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-black uppercase rounded-lg border border-blue-100">
+                        {log.area_to_work_on}
+                      </span>
+                      <span className="px-3 py-1 bg-purple-50 text-purple-600 text-[10px] font-black uppercase rounded-lg border border-purple-100">
+                        {log.category}
+                      </span>
+                      {log.current_status && (
+                        <span className="px-3 py-1 bg-green-50 text-green-600 text-[10px] font-black uppercase rounded-lg border border-green-100">
+                          {log.current_status}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-8 bg-gray-50/80 border-t border-gray-100 flex justify-center">
+               <button 
+                 onClick={() => setActiveFilter(null)}
+                 className="px-10 py-4 bg-gray-900 text-white text-xs font-black uppercase tracking-[0.3em] rounded-full hover:bg-blue-600 hover:shadow-2xl hover:shadow-blue-200 transition-all active:scale-95"
+               >
+                 Close Inspector
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-center space-x-3 bg-white/50 self-center px-10 py-4 rounded-full border border-gray-200 shadow-sm">
         <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse shadow-lg shadow-blue-200"></div>
