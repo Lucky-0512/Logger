@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
+import { db } from '../services/supabaseService';
 
 interface LoginFormProps {
   onLogin: (user: User) => void;
@@ -15,13 +16,14 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onSwitchToRegister }) =>
   const [password, setPassword] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsSubmitting(true);
 
     if (isAdmin) {
-      // Logic for the single hardcoded Admin
       if (empId === DEFAULT_ADMIN_ID && password === DEFAULT_ADMIN_PASS) {
         onLogin({
           emp_id: DEFAULT_ADMIN_ID,
@@ -31,20 +33,26 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onSwitchToRegister }) =>
       } else {
         setError('Invalid Admin credentials.');
       }
+      setIsSubmitting(false);
       return;
     }
 
-    // Logic for Employees
-    const storedUsers = localStorage.getItem('users_data_v1');
-    const users: User[] = storedUsers ? JSON.parse(storedUsers) : [];
-    const foundUser = users.find(u => u.emp_id === empId && u.role === UserRole.EMPLOYEE);
+    try {
+      const users = await db.getUsers();
+      const foundUser = users.find(u => u.emp_id === empId && u.role === UserRole.EMPLOYEE);
 
-    if (!foundUser) {
-      setError('Employee ID not found. Please register first.');
-      return;
+      if (!foundUser) {
+        setError('Employee ID not found. Please register first.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      onLogin(foundUser);
+    } catch (err) {
+      setError('Could not connect to database.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    onLogin(foundUser);
   };
 
   return (
@@ -76,7 +84,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onSwitchToRegister }) =>
             required
             value={empId}
             onChange={(e) => setEmpId(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
             placeholder={isAdmin ? "heygen123" : "e.g. EMP123"}
           />
         </div>
@@ -89,7 +97,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onSwitchToRegister }) =>
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               placeholder="••••••••"
             />
           </div>
@@ -99,9 +107,10 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin, onSwitchToRegister }) =>
 
         <button
           type="submit"
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors"
+          disabled={isSubmitting}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors disabled:opacity-50"
         >
-          Login
+          {isSubmitting ? 'Authenticating...' : 'Login'}
         </button>
       </form>
 

@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
+import { db } from '../services/supabaseService';
 
 interface RegisterFormProps {
   onRegisterSuccess: () => void;
@@ -11,29 +12,35 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onRegisterSuccess, onSwitch
   const [empId, setEmpId] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsSubmitting(true);
 
-    const storedUsers = localStorage.getItem('users_data_v1');
-    const users: User[] = storedUsers ? JSON.parse(storedUsers) : [];
+    try {
+      const users = await db.getUsers();
+      if (users.some(u => u.emp_id === empId)) {
+        setError('This Employee ID is already registered.');
+        setIsSubmitting(false);
+        return;
+      }
 
-    if (users.some(u => u.emp_id === empId)) {
-      setError('This Employee ID is already registered.');
-      return;
+      const newUser: User = {
+        emp_id: empId,
+        name,
+        role: UserRole.EMPLOYEE
+      };
+
+      await db.registerUser(newUser);
+      alert('Registration successful! You can now log in.');
+      onRegisterSuccess();
+    } catch (err) {
+      setError('Connection error. Please try again later.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const newUser: User = {
-      emp_id: empId,
-      name,
-      role: UserRole.EMPLOYEE
-    };
-
-    users.push(newUser);
-    localStorage.setItem('users_data_v1', JSON.stringify(users));
-    alert('Registration successful! You can now log in.');
-    onRegisterSuccess();
   };
 
   return (
@@ -70,9 +77,10 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onRegisterSuccess, onSwitch
 
         <button
           type="submit"
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors"
+          disabled={isSubmitting}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors disabled:opacity-50"
         >
-          Create Employee Account
+          {isSubmitting ? 'Creating Account...' : 'Create Employee Account'}
         </button>
       </form>
 
