@@ -1,66 +1,54 @@
 
-import React, { useState, useEffect } from 'react';
-import { User, UserRole, Suggestion } from './types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { User, UserRole, Suggestion, Category, AreaToWorkOn } from './types';
 import Navigation from './components/Navigation';
 import LoginForm from './components/LoginForm';
 import RegisterForm from './components/RegisterForm';
 import UserDashboard from './components/UserDashboard';
 import AdminDashboard from './components/AdminDashboard';
-import { apiService } from './services/apiService';
 
-const STORAGE_KEY_SESSION = 'current_user_session_v1';
+const STORAGE_KEY_SUGGESTIONS = 'suggestions_data_v1';
+const STORAGE_KEY_USERS = 'users_data_v1';
+const STORAGE_KEY_CURRENT_USER = 'current_user_v1';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [view, setView] = useState<'login' | 'register' | 'dashboard'>('login');
   const [isLoading, setIsLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
 
-  // Initialize: Check for existing session and load data
+  // Initialize data
   useEffect(() => {
-    const initApp = async () => {
-      setIsLoading(true);
-      try {
-        const storedUser = localStorage.getItem(STORAGE_KEY_SESSION);
-        if (storedUser) {
-          const user = JSON.parse(storedUser);
-          setCurrentUser(user);
-          const data = await apiService.fetchAllSuggestions();
-          setSuggestions(data);
-          setView('dashboard');
-        }
-      } catch (err) {
-        console.error("Failed to restore session", err);
-        localStorage.removeItem(STORAGE_KEY_SESSION);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    initApp();
+    const storedSuggestions = localStorage.getItem(STORAGE_KEY_SUGGESTIONS);
+    const storedUsers = localStorage.getItem(STORAGE_KEY_USERS);
+    const storedCurrentUser = localStorage.getItem(STORAGE_KEY_CURRENT_USER);
+
+    if (storedSuggestions) setSuggestions(JSON.parse(storedSuggestions));
+    if (storedCurrentUser) {
+      setCurrentUser(JSON.parse(storedCurrentUser));
+      setView('dashboard');
+    }
+    setIsLoading(false);
   }, []);
 
-  const handleLogin = async (user: User) => {
+  // Persist suggestions
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_SUGGESTIONS, JSON.stringify(suggestions));
+  }, [suggestions]);
+
+  const handleLogin = (user: User) => {
     setCurrentUser(user);
-    localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(user));
-    setIsSyncing(true);
-    try {
-      const data = await apiService.fetchAllSuggestions();
-      setSuggestions(data);
-      setView('dashboard');
-    } finally {
-      setIsSyncing(false);
-    }
+    localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(user));
+    setView('dashboard');
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
-    localStorage.removeItem(STORAGE_KEY_SESSION);
+    localStorage.removeItem(STORAGE_KEY_CURRENT_USER);
     setView('login');
-    setSuggestions([]);
   };
 
-  const addSuggestion = async (newSuggestion: Omit<Suggestion, 'id' | 'date_of_suggestion' | 'emp_id' | 'suggested_by'>) => {
+  const addSuggestion = (newSuggestion: Omit<Suggestion, 'id' | 'date_of_suggestion' | 'emp_id' | 'suggested_by'>) => {
     if (!currentUser) return;
 
     const suggestion: Suggestion = {
@@ -69,51 +57,35 @@ const App: React.FC = () => {
       date_of_suggestion: new Date().toLocaleDateString(),
       emp_id: currentUser.emp_id,
       suggested_by: currentUser.name,
-    } as Suggestion;
+      evaluation: '',
+      current_status: '',
+      reviewed: '',
+      conclusion: '',
+      went_live: '',
+      final_status: '',
+      owner: '',
+      tentative_eta: '',
+      revised_date: '',
+      remarks: ''
+    };
 
-    setIsSyncing(true);
-    try {
-      await apiService.addSuggestion(suggestion);
-      // Refresh local state from "server"
-      const data = await apiService.fetchAllSuggestions();
-      setSuggestions(data);
-    } catch (err) {
-      alert("Error saving suggestion to database.");
-    } finally {
-      setIsSyncing(false);
-    }
+    setSuggestions(prev => [suggestion, ...prev]);
   };
 
-  const updateSuggestion = async (id: string, updates: Partial<Suggestion>) => {
-    setIsSyncing(true);
-    try {
-      await apiService.updateSuggestion(id, updates);
-      const data = await apiService.fetchAllSuggestions();
-      setSuggestions(data);
-    } catch (err) {
-      alert("Failed to update database record.");
-    } finally {
-      setIsSyncing(false);
-    }
+  const updateSuggestion = (id: string, updates: Partial<Suggestion>) => {
+    setSuggestions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
   };
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-        <p className="text-gray-500 font-medium">Connecting to secure server...</p>
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative">
-      {isSyncing && (
-        <div className="fixed top-0 left-0 w-full h-1 bg-blue-100 z-[9999] overflow-hidden">
-          <div className="h-full bg-blue-600 animate-[loading_1.5s_infinite_linear]"></div>
-        </div>
-      )}
-      
+    <div className="min-h-screen flex flex-col">
       <Navigation currentUser={currentUser} onLogout={handleLogout} />
       
       <main className="flex-grow container mx-auto px-4 py-8">
@@ -147,20 +119,9 @@ const App: React.FC = () => {
         )}
       </main>
 
-      <footer className="bg-white border-t py-4 px-4 flex justify-between items-center text-gray-400 text-xs">
-        <div>&copy; {new Date().getFullYear()} Suggestion Logs Pro. Confidential.</div>
-        <div className="flex items-center">
-          <div className={`w-2 h-2 rounded-full mr-2 ${isSyncing ? 'bg-yellow-400 animate-pulse' : 'bg-green-500'}`}></div>
-          {isSyncing ? 'Database Syncing...' : 'Database Connected'}
-        </div>
+      <footer className="bg-white border-t py-4 text-center text-gray-500 text-sm">
+        &copy; {new Date().getFullYear()} Suggestion Logs Pro. Confidential Internal Tool.
       </footer>
-
-      <style>{`
-        @keyframes loading {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-      `}</style>
     </div>
   );
 };
